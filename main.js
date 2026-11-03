@@ -192,6 +192,113 @@ window.handleNextClick = function (e) {
     resetAutoSwipeTimer();
   }
 }; /* Hỗ trợ Auto swipe tự động lướt*/
+function initFlagSpheres() {
+  document.querySelectorAll(".flag-orb-image").forEach(function (image) {
+    function renderSphere() {
+      if (!image.naturalWidth || image.dataset.flagOrbReady) return;
+      image.dataset.flagOrbReady = "true";
+
+      var textureCanvas = document.createElement("canvas");
+      textureCanvas.width = image.naturalWidth;
+      textureCanvas.height = image.naturalHeight;
+      var textureContext = textureCanvas.getContext("2d", {
+        willReadFrequently: true,
+      });
+      if (!textureContext) return;
+      textureContext.drawImage(image, 0, 0);
+      var texture = textureContext.getImageData(
+        0,
+        0,
+        textureCanvas.width,
+        textureCanvas.height,
+      );
+
+      var size = 160;
+      var sphereCanvas = document.createElement("canvas");
+      sphereCanvas.className = "flag-orb-canvas";
+      sphereCanvas.width = size;
+      sphereCanvas.height = size;
+      sphereCanvas.setAttribute("aria-hidden", "true");
+      var sphereContext = sphereCanvas.getContext("2d");
+      if (!sphereContext) return;
+      var frame = sphereContext.createImageData(size, size);
+      var pixels = frame.data;
+      var points = [];
+      var radius = size / 2;
+      var tau = Math.PI * 2;
+      var lightX = -0.45;
+      var lightY = -0.35;
+      var lightZ = 0.82;
+      var lightLength = Math.sqrt(
+        lightX * lightX + lightY * lightY + lightZ * lightZ,
+      );
+      lightX /= lightLength;
+      lightY /= lightLength;
+      lightZ /= lightLength;
+
+      for (var y = 0; y < size; y++) {
+        for (var x = 0; x < size; x++) {
+          var nx = (x + 0.5 - radius) / radius;
+          var ny = (y + 0.5 - radius) / radius;
+          var distanceSquared = nx * nx + ny * ny;
+          var pixelIndex = (y * size + x) * 4;
+          if (distanceSquared > 1) continue;
+
+          var nz = Math.sqrt(1 - distanceSquared);
+          var longitude = Math.atan2(nx, nz);
+          var latitude = Math.asin(-ny);
+          var light = Math.max(
+            0.28,
+            0.3 + (nx * lightX - ny * lightY + nz * lightZ) * 0.7,
+          );
+          points.push({
+            pixelIndex: pixelIndex,
+            longitude: longitude,
+            textureY: Math.min(
+              textureCanvas.height - 1,
+              Math.max(
+                0,
+                Math.floor((0.5 - latitude / Math.PI) * textureCanvas.height),
+              ),
+            ),
+            light: light,
+          });
+          pixels[pixelIndex + 3] = 255;
+        }
+      }
+
+      image.parentElement.appendChild(sphereCanvas);
+      image.style.opacity = "0";
+      function drawSphere(timestamp) {
+        var rotation = timestamp * 0.00055;
+        for (var i = 0; i < points.length; i++) {
+          var point = points[i];
+          var u = ((point.longitude + rotation) / tau + 0.5) % 1;
+          if (u < 0) u += 1;
+          var textureX = Math.floor(u * textureCanvas.width);
+          var textureIndex =
+            (point.textureY * textureCanvas.width + textureX) * 4;
+          var outputIndex = point.pixelIndex;
+          pixels[outputIndex] = texture.data[textureIndex] * point.light;
+          pixels[outputIndex + 1] =
+            texture.data[textureIndex + 1] * point.light;
+          pixels[outputIndex + 2] =
+            texture.data[textureIndex + 2] * point.light;
+        }
+        sphereContext.putImageData(frame, 0, 0);
+        requestAnimationFrame(drawSphere);
+      }
+      requestAnimationFrame(drawSphere);
+    }
+
+    if (image.complete) {
+      renderSphere();
+    } else {
+      image.addEventListener("load", renderSphere, { once: true });
+    }
+  });
+}
+initFlagSpheres();
 function startAutoSwipe() {
   if (!isAutoSwipe || totalCards <= 1) return;
   stopAutoSwipe();
